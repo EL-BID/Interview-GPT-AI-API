@@ -61,6 +61,7 @@ def interviewer_node(state: InterviewState) -> InterviewState:
     try:
         llm = get_llm()
         current_question = state["current_question"]
+        total_questions = state["total_questions"]
         user_data = state.get("user_data", {})
         nombre_usuario = user_data.get("nombre", "").split()[0] if user_data and user_data.get("nombre") else ""
         
@@ -82,6 +83,7 @@ Tu objetivo es obtener información detallada y completa sobre el tema, mantenie
 {participante_section}
 CONTEXTO DE LA PREGUNTA:
 Pregunta actual: {current_question['question']}
+Numero de pregunta actual: {state['question_number']}
 Total de preguntas: {state['total_questions']}
 Aspectos a explorar: {current_question['context']}
 
