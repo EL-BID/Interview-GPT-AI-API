@@ -1,0 +1,13 @@
+azure-functions
+python-dotenv
+langchain
+langchain-openai
+langgraph
+psycopg[binary]
+psycopg-pool
+azure-identity
+azure-core
+langgraph-checkpoint
+langgraph-checkpoint-postgres
+azurefunctions-extensions-http-fastapi
+langchain-core
