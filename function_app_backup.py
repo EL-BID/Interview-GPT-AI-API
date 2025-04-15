@@ -59,7 +59,7 @@ async def process_interview_request(req_body):
                 state=state,
                 thread_id=thread_id
             )
-            logger.info(f"Entrevista ejecutada. Resultado: {json.dumps(result)}")
+            
             
             # Verificar el resultado
             if result["status"] == "success":

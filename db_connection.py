@@ -12,7 +12,7 @@ async def get_db_connection():
         conn_string = (
             f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
             f"@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
-            f"?sslmode={os.getenv('POSTGRES_SSLMODE', 'require')}"
+            f"?sslmode={os.getenv('POSTGRES_SSLMODE', 'prefer')}"
         )
         
         print(f"Intentando conectar a: {conn_string}")
@@ -25,13 +25,13 @@ async def get_db_connection():
                 "autocommit": True,
                 "prepare_threshold": 0,
                 "row_factory": dict_row,
+                "connect_timeout": 10,  # Añadir timeout de conexión
             },
-        ) 
-            # Crear el checkpointer asíncrono
+        )
+        
+        # Crear el checkpointer asíncrono
         checkpointer = AsyncPostgresSaver(pool)
-            
-       
-            
+        
         return checkpointer, pool
         
     except Exception as e:
