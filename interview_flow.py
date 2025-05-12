@@ -23,6 +23,8 @@ class InterviewState(TypedDict):
     question_number: int  # Número de pregunta actual
     total_questions: int  # Total de preguntas
     user_data: Optional[Dict[str, Any]]  # Datos del usuario
+    description: str  # Descripción general de la entrevista (opcional)
+    language: str  # Idioma en el que se realizará la entrevista (por defecto 'es')
 
 def get_llm():
     """Configuración del LLM."""
@@ -190,6 +192,8 @@ def interviewer_node(state: InterviewState) -> InterviewState:
         user_data = state.get("user_data", {})
         nombre_usuario = user_data.get("nombre", "").split()[0] if user_data and user_data.get("nombre") else ""
         is_complete = state.get("is_complete", False)
+        description = state.get("description", "")
+        language = state.get("language", "es")
         
         logger.info(f"Estado is_complete en interviewer_node: {is_complete}")
         
@@ -203,6 +207,8 @@ def interviewer_node(state: InterviewState) -> InterviewState:
         system_message = SystemMessage(
             content=f"""Eres un entrevistador profesional, amigable y cercano. Tu objetivo es hacer que el participante se sienta cómodo mientras obtienes una respuesta completa a la pregunta.
 
+IMPORTANTE: DEBES RESPONDER EN {language.upper()}
+
 {participante_section}
 PREGUNTA ACTUAL:
 {current_question['question']}
@@ -211,6 +217,7 @@ CONTEXTO ESPECÍFICO A EXPLORAR:
 {current_question['context']}
 
 INFORMACIÓN DE LA ENTREVISTA:
+Esta es una entrevista acerca de {description}
 Pregunta actual: {current_question['question_number']} de {current_question['total_questions']}
 Estado de la respuesta: {estado_actual}
 Valor de is_complete: {is_complete}
@@ -221,7 +228,9 @@ INSTRUCCIONES:
 3. No des opiniones, sugerencias ni interpretes las respuestas
 4. Muestra interés genuino en las respuestas del participante
 5. NUNCA cierres la conversación hasta que la respuesta esté completa o el participante indique que no sabe/no quiere responder
-6. Mantén la conversación activa con preguntas de seguimiento relevantes
+6. Mantén la conversación activa con preguntas de seguimiento relevantes al tema de {description}
+   - EN CADA MENSAJE, haz SOLO UNA o DOS preguntas de seguimiento
+   - Prioriza la pregunta más relevante para el contexto
 7. NO TE DESVÍES DE LA PREGUNTA Y CONTEXTO ACTUAL:
    - Si el participante hace preguntas, responde amablemente que te enfocarás en su respuesta primero
    - Si el participante menciona temas no relevantes, redirígelo suavemente hacia la pregunta original
@@ -235,11 +244,10 @@ MANEJO DE RESPUESTAS:
    - Haz una pregunta de seguimiento específica sobre el contexto
 
 2. Si la respuesta es incompleta (is_complete = False) de acuerdo a {is_complete}:
-   - Haz preguntas de seguimiento naturales sobre el contexto
+   - Haz preguntas de seguimiento naturales sobre el contexto y el tema de {description}
    - Pide detalles y ejemplos concretos
    - Explora aspectos relevantes no mencionados
    - Continúa la conversación hasta obtener una respuesta completa
-
 
 3. Si el participante no sabe o no quiere responder (is_complete = NS-NR) de acuerdo a {is_complete}:
    - Si es la última pregunta:
@@ -250,9 +258,10 @@ MANEJO DE RESPUESTAS:
 IMPORTANTE:
 - Mantén la conversación activa hasta obtener una respuesta completa
 - No cierres la conversación prematuramente
-- Haz preguntas de seguimiento relevantes y específicas
+- Haz preguntas de seguimiento relevantes y específicas al tema de {description}
 - Guía al participante de manera constructiva hacia una respuesta completa
 - NO PERMITAS DESVIACIONES DE LA PREGUNTA Y CONTEXTO ACTUAL
+- RESPONDE EN {language.upper()}
 """
         )
         
@@ -424,6 +433,14 @@ def despedida_node(state: InterviewState) -> InterviewState:
         current_question = state["current_question"]
         user_data = state.get("user_data", {})
         nombre_usuario = user_data.get("nombre", "").split()[0] if user_data and user_data.get("nombre") else ""
+        language = state.get("language", "es")
+        
+        # Obtener el último mensaje del participante
+        last_user_message = None
+        for msg in reversed(state["messages"]):
+            if isinstance(msg, HumanMessage):
+                last_user_message = msg.content
+                break
         
         # Crear un prompt para generar el mensaje de despedida
         despedida_prompt = SystemMessage(
@@ -438,6 +455,9 @@ NOMBRE DEL PARTICIPANTE:
 ES LA ÚLTIMA PREGUNTA:
 {"Sí" if current_question['question_number'] == current_question['total_questions'] else "No"}
 
+ÚLTIMA RESPUESTA DEL PARTICIPANTE:
+{last_user_message if last_user_message else "No hay respuesta previa"}
+
 INSTRUCCIONES:
 1. Genera un mensaje de despedida que:
    - Sea personalizado usando el nombre del participante
@@ -447,6 +467,7 @@ INSTRUCCIONES:
 2. El mensaje debe ser conciso (1-2 lineas máximo)
 3. No debe incluir preguntas ni solicitudes de información adicional
 4. Debe sonar natural y conversacional
+5. DEBES responder en {language.upper()}
 
 IMPORTANTE:
 - DEBES responder con el mensaje de despedida directamente
@@ -527,7 +548,7 @@ def get_interview_graph(checkpointer=None):
     graph = build_graph(checkpointer)
     return graph
 
-async def run_interview_async(question: Dict = None, user_data: Dict = None, user_response: str = None, thread_id: str = "test-thread"):
+async def run_interview_async(question: Dict = None, user_data: Dict = None, user_response: str = None, thread_id: str = "test-thread", description: str = "", language: str = "es"):
     """
     Función principal que ejecuta la entrevista de forma asíncrona.
     
@@ -536,6 +557,8 @@ async def run_interview_async(question: Dict = None, user_data: Dict = None, use
         user_data (Dict): Datos del usuario
         user_response (str): Respuesta del usuario si existe
         thread_id (str): ID del hilo de la entrevista
+        description (str): Descripción general de la entrevista (opcional)
+        language (str): Idioma en el que se realizará la entrevista (por defecto 'es')
         
     Returns:
         Dict: Resultados de la entrevista
@@ -552,7 +575,9 @@ async def run_interview_async(question: Dict = None, user_data: Dict = None, use
             },
             "is_complete": False,
             "validation_result": "",
-            "user_data": user_data or {}
+            "user_data": user_data or {},
+            "description": description,
+            "language": language
         }
         
         # Configuración para el checkpointer

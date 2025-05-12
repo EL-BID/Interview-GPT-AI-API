@@ -39,7 +39,9 @@ async def run_interview(req: func.HttpRequest) -> func.HttpResponse:
                 question=req_body.get('question'),
                 user_data=req_body.get('user_data'),
                 user_response=req_body.get('user_response'),
-                thread_id=thread_id
+                thread_id=thread_id,
+                description=req_body.get('description', ''),
+                language=req_body.get('language', 'es')
             )
            
             
