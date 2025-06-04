@@ -207,7 +207,10 @@ def interviewer_node(state: InterviewState) -> InterviewState:
         system_message = SystemMessage(
             content=f"""Eres un entrevistador profesional, amigable y cercano. Tu objetivo es hacer que el participante se sienta cómodo mientras obtienes una respuesta completa a la pregunta.
 
-IMPORTANTE: DEBES RESPONDER EN {language.upper()}
+IMPORTANTE SOBRE EL IDIOMA:
+1. DEBES RESPONDER EN EL MISMO IDIOMA EN QUE ESTÁ FORMULADA LA PREGUNTA
+2. Si la pregunta está en un idioma específico, usa ese idioma para todas tus respuestas
+3. Solo si la pregunta no tiene un idioma claro, usa el idioma por defecto: {language.upper()}
 
 {participante_section}
 PREGUNTA ACTUAL:
@@ -261,7 +264,7 @@ IMPORTANTE:
 - Haz preguntas de seguimiento relevantes y específicas al tema de {description}
 - Guía al participante de manera constructiva hacia una respuesta completa
 - NO PERMITAS DESVIACIONES DE LA PREGUNTA Y CONTEXTO ACTUAL
-- RESPONDE EN {language.upper()}
+- RESPONDE EN EL MISMO IDIOMA DE LA PREGUNTA, o en {language.upper()} si no es claro
 """
         )
         
@@ -324,9 +327,12 @@ def validate_response(state: InterviewState) -> InterviewState:
         if not messages or not any(isinstance(msg, HumanMessage) for msg in messages):
             return state
             
+        # Calcular el número de mensajes del usuario
+        user_messages_count = len([msg for msg in messages if isinstance(msg, HumanMessage)])
+            
         # Crear el prompt del sistema para validación
         system_message = SystemMessage(
-            content=f"""Eres un analista experto en evaluar respuestas. Tu tarea es analizar TODA la conversación para determinar si se han cubierto ABSOLUTAMENTE TODOS los aspectos requeridos tanto de la pregunta como del contexto.
+            content=f"""Eres un analista experto en evaluar respuestas. Tu tarea es analizar TODA la conversación para determinar si se han cubierto TODOS los aspectos requeridos tanto de la pregunta como del contexto.
 
 ====================================================================
 PREGUNTA A EVALUAR:
@@ -338,6 +344,10 @@ CONTEXTO REQUERIDO:
 {current_question['context']}
 ====================================================================
 
+====================================================================
+INFORMACIÓN DE LA CONVERSACIÓN:
+Número de mensajes del usuario: {user_messages_count}
+====================================================================
 
 INSTRUCCIONES:
 
@@ -353,12 +363,14 @@ INSTRUCCIONES:
    - Si el usuario indica explícitamente que quiere terminar o pasar a la siguiente pregunta, marca como COMPLETADO
 
 3. CASO ESPECIAL (Solo para primera respuesta):
-   - Marca como "NS-NR" si el participante indica que no sabe o no quiere responder
-   - Marca como "NS-NR" si la respuesta es totalmente incoherente
-   - Marca como "COMPLETADO" si el usuario expresa que no tiene nada más que agregar o quiere terminar
+   - IMPORTANTE: Este caso especial SOLO aplica si el número de mensajes del usuario es 1
+   - Si hay exactamente 1 mensaje del usuario:
+     * Marca como "NS-NR" si el participante indica que no sabe o no quiere responder
+     * Marca como "COMPLETADO" si el usuario expresa que no tiene nada más que agregar o quiere terminar
+   - Si hay más de 1 mensaje del usuario, ignora este caso especial y evalúa según los criterios normales
 
 4. Responde EXACTAMENTE con uno de estos formatos:
-   a) "NS-NR: [explicación]" - Solo para primera respuesta
+   a) "NS-NR: [explicación]" - Solo para primera respuesta (cuando hay exactamente 1 mensaje del usuario)
    b) "COMPLETADO: [explicación de cómo la conversación cubrió todo]"
    c) "INCOMPLETO: [lista de aspectos faltantes]"
 
@@ -446,6 +458,11 @@ def despedida_node(state: InterviewState) -> InterviewState:
         despedida_prompt = SystemMessage(
             content=f"""Eres un entrevistador profesional y amigable. Tu tarea es generar un mensaje de despedida apropiado basado en la siguiente información:
 
+IMPORTANTE SOBRE EL IDIOMA:
+1. DEBES RESPONDER EN EL MISMO IDIOMA EN QUE ESTÁ FORMULADA LA PREGUNTA
+2. Si la pregunta está en un idioma específico, usa ese idioma para todas tus respuestas
+3. Solo si la pregunta no tiene un idioma claro, usa el idioma por defecto: {language.upper()}
+
 PREGUNTA ACTUAL:
 {current_question['question']}
 
@@ -467,7 +484,7 @@ INSTRUCCIONES:
 2. El mensaje debe ser conciso (1-2 lineas máximo)
 3. No debe incluir preguntas ni solicitudes de información adicional
 4. Debe sonar natural y conversacional
-5. DEBES responder en {language.upper()}
+5. DEBES responder en el mismo idioma de la pregunta, o en {language.upper()} si no es claro
 
 IMPORTANTE:
 - DEBES responder con el mensaje de despedida directamente
