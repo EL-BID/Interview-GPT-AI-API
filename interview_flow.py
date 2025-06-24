@@ -10,24 +10,24 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from db_connection import get_db_connection
 
-# Configurar logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class InterviewState(TypedDict):
-    """Estado de la entrevista."""
-    messages: Annotated[List[BaseMessage], add_messages]  # Historial de mensajes
-    current_question: Dict  # Pregunta actual y su contexto
-    is_complete: bool  # Indica si la pregunta está completada
-    validation_result: str  # Resultado de la validación de la respuesta
-    question_number: int  # Número de pregunta actual
-    total_questions: int  # Total de preguntas
-    user_data: Optional[Dict[str, Any]]  # Datos del usuario
-    description: str  # Descripción general de la entrevista (opcional)
-    language: str  # Idioma en el que se realizará la entrevista (por defecto 'es')
+    """Interview state."""
+    messages: Annotated[List[BaseMessage], add_messages]  # Message history
+    current_question: Dict  # Current question and its context
+    is_complete: bool  # Indicates if the question is completed
+    validation_result: str  # Response validation result
+    question_number: int  # Current question number
+    total_questions: int  # Total questions
+    user_data: Optional[Dict[str, Any]]  # User data
+    description: str  # General interview description (optional)
+    language: str  # Language in which the interview will be conducted (default 'es')
 
 def get_llm():
-    """Configuración del LLM."""
+    """LLM configuration."""
     return AzureChatOpenAI(
         deployment_name=os.getenv("AZURE_DEPLOYMENT_NAME"),
         openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
@@ -37,40 +37,40 @@ def get_llm():
 
 def process_chunks(chunk: Dict) -> Dict:
     """
-    Procesa los chunks del agente y extrae los mensajes relevantes.
+    Processes agent chunks and extracts relevant messages.
     
     Args:
-        chunk (Dict): Chunk de datos del agente
+        chunk (Dict): Agent data chunk
         
     Returns:
-        Dict: Diccionario con los mensajes procesados y el valor de is_complete
+        Dict: Dictionary with processed messages and is_complete value
     """
     processed_messages = []
     
-    # Verificar si el chunk tiene la estructura esperada
+    # Check if chunk has expected structure
     if "interviewer" in chunk and "messages" in chunk["interviewer"]:
         for message in chunk["interviewer"]["messages"]:
-            # Solo procesar mensajes que no sean SystemMessage
+            # Only process messages that are not SystemMessage
             if not isinstance(message, SystemMessage):
                 processed_messages.append({
                     "role": "assistant" if isinstance(message, AIMessage) else "user",
                     "content": message.content
                 })
-    elif "despedida" in chunk and "messages" in chunk["despedida"]:
-        for message in chunk["despedida"]["messages"]:
-            # Solo procesar mensajes que no sean SystemMessage
+    elif "farewell" in chunk and "messages" in chunk["farewell"]:
+        for message in chunk["farewell"]["messages"]:
+            # Only process messages that are not SystemMessage
             if not isinstance(message, SystemMessage):
                 processed_messages.append({
                     "role": "assistant" if isinstance(message, AIMessage) else "user",
                     "content": message.content
                 })
     
-    # Extraer el valor de is_complete y validation_result del chunk
-    is_complete = chunk.get("interviewer", {}).get("is_complete", False) or chunk.get("despedida", {}).get("is_complete", False)
-    validation_result = chunk.get("interviewer", {}).get("validation_result", "") or chunk.get("despedida", {}).get("validation_result", "")
+    # Extract is_complete and validation_result values from chunk
+    is_complete = chunk.get("interviewer", {}).get("is_complete", False) or chunk.get("farewell", {}).get("is_complete", False)
+    validation_result = chunk.get("interviewer", {}).get("validation_result", "") or chunk.get("farewell", {}).get("validation_result", "")
     
-    print(f"Valor de is_complete en process_chunks: {is_complete}")
-    print(f"Valor de validation_result en process_chunks: {validation_result}")
+    print(f"is_complete value in process_chunks: {is_complete}")
+    print(f"validation_result value in process_chunks: {validation_result}")
     
     return {
         "messages": processed_messages,
@@ -78,24 +78,24 @@ def process_chunks(chunk: Dict) -> Dict:
         "validation_result": validation_result
     }
 
-def refrasear_mensaje(llm, messages, error_data, system_message=None):
+def rephrase_message(llm, messages, error_data, system_message=None):
     """
-    Función auxiliar para refrasear mensajes cuando se detecta un error de filtro de contenido.
+    Helper function to rephrase messages when content filter error is detected.
     
     Args:
-        llm: Instancia del modelo de lenguaje
-        messages: Lista de mensajes a procesar
-        error_data: Datos del error de filtro de contenido
-        system_message: Mensaje del sistema con las instrucciones originales (opcional)
+        llm: Language model instance
+        messages: List of messages to process
+        error_data: Content filter error data
+        system_message: System message with original instructions (optional)
         
     Returns:
-        tuple: (mensajes actualizados, éxito)
+        tuple: (updated messages, success)
     """
     try:
-        # Obtener los resultados del filtro
+        # Get filter results
         filter_result = error_data.get('error', {}).get('innererror', {}).get('content_filter_result', {})
         
-        # Verificar qué categorías activaron el filtro
+        # Check which categories triggered the filter
         triggered_categories = []
         for category, result in filter_result.items():
             if result.get('filtered', False):
@@ -103,32 +103,32 @@ def refrasear_mensaje(llm, messages, error_data, system_message=None):
                 triggered_categories.append((category, severity))
         
         if triggered_categories:
-            # Si hay un system_message, intentar refrasearlo primero
+            # If there's a system_message, try to rephrase it first
             if system_message:
                 try:
-                    # Crear un prompt para refraseo del system_message
-                    rephrase_system_prompt = SystemMessage(content=f"""Por favor, reformula las siguientes instrucciones de una manera más apropiada, manteniendo el mismo significado y tono profesional pero evitando cualquier contenido que pueda ser considerado inapropiado:
+                    # Prompt for system_message rephrasing
+                    rephrase_system_prompt = SystemMessage(content=f"""Please reformulate the following instructions in a more appropriate way, maintaining the same meaning and professional tone but avoiding any content that could be considered inappropriate:
 
-Instrucciones originales: {system_message.content}
+Original instructions: {system_message.content}
 
-Reformula las instrucciones de manera que:
-1. Mantenga el mismo estilo y tono profesional
-2. Evite cualquier lenguaje que pueda ser considerado inapropiado
-3. Conserve el mismo objetivo y significado de las instrucciones originales
-4. Sea claro y directo, manteniendo un tono profesional""")
+Reformulate the instructions so that:
+1. Maintains the same style and professional tone
+2. Avoids any language that could be considered inappropriate
+3. Preserves the same objective and meaning of the original instructions
+4. Is clear and direct, maintaining a professional tone""")
                     
-                    # Obtener la versión refraseada del system_message
+                    # Get the rephrased version of the system_message
                     rephrased_system_response = llm.invoke([rephrase_system_prompt])
                     rephrased_system_content = rephrased_system_response.content
                     
-                    # Actualizar el system_message
+                    # Update the system_message
                     system_message = SystemMessage(content=rephrased_system_content)
-                    logger.info(f"Prompt del sistema refraseado: {rephrased_system_content}")
+                    logger.info(f"Rephrased system prompt: {rephrased_system_content}")
                 except Exception as e:
-                    logger.error(f"Error al refrasear el prompt del sistema: {str(e)}")
+                    logger.error(f"Error rephrasing system prompt: {str(e)}")
                     return messages, False, None
             
-            # Obtener el último mensaje del usuario
+            # Get the last user message
             last_user_message = None
             for msg in reversed(messages):
                 if isinstance(msg, HumanMessage):
@@ -136,44 +136,44 @@ Reformula las instrucciones de manera que:
                     break
             
             if last_user_message:
-                # Crear un prompt para refraseo del mensaje del usuario
-                rephrase_prompt = SystemMessage(content=f"""Por favor, reformula la siguiente respuesta de una manera más apropiada, manteniendo el mismo significado y tono conversacional pero evitando cualquier contenido que pueda ser considerado inapropiado:
+                # Prompt for user message rephrasing
+                rephrase_prompt = SystemMessage(content=f"""Please reformulate the following response in a more appropriate way, maintaining the same meaning and conversational tone but avoiding any content that could be considered inappropriate:
 
-Respuesta original: {last_user_message}
+Original response: {last_user_message}
 
-Reformula la respuesta de manera que:
-1. Mantenga el mismo estilo y tono de la respuesta original
-2. Evite cualquier lenguaje que pueda ser considerado inapropiado
-3. Conserve el mismo objetivo y significado de la respuesta original
-4. Sea natural y conversacional, sin ser excesivamente formal""")
+Reformulate the response so that:
+1. Maintains the same style and tone of the original response
+2. Avoids any language that could be considered inappropriate
+3. Preserves the same objective and meaning of the original response
+4. Is natural and conversational, without being excessively formal""")
                 
-                # Obtener la versión refraseada
+                # Get the rephrased version
                 rephrased_response = llm.invoke([rephrase_prompt])
                 rephrased_message = rephrased_response.content
                 
-                # Actualizar el mensaje en la lista
+                # Update the message in the list
                 for i, msg in enumerate(messages):
                     if isinstance(msg, HumanMessage) and msg.content == last_user_message:
                         messages[i] = HumanMessage(content=rephrased_message)
                         break
                 
-                logger.info(f"Respuesta refraseada: {rephrased_message}")
+                logger.info(f"Rephrased response: {rephrased_message}")
                 
-                # Si se proporcionó un system_message, intentar la llamada al LLM con las instrucciones originales
+                # If a system_message was provided, try the LLM call with the original instructions
                 if system_message:
                     try:
-                        # Asegurarse de que el system_message esté al principio
+                        # Make sure the system_message is at the beginning
                         if not isinstance(messages[0], SystemMessage):
                             messages = [system_message] + messages
                         elif messages[0].content != system_message.content:
                             messages[0] = system_message
                         
-                        # Intentar la llamada al LLM con los mensajes actualizados
+                        # Try the LLM call with updated messages
                         response = llm.invoke(messages)
-                        logger.info(f"Llamada al LLM exitosa después del refraseo")
+                        logger.info(f"LLM call successful after rephrasing")
                         return messages, True, response
                     except Exception as e:
-                        logger.error(f"Error al llamar al LLM después del refraseo: {str(e)}")
+                        logger.error(f"Error calling LLM after rephrasing: {str(e)}")
                         return messages, False, None
                 
                 return messages, True, None
@@ -181,116 +181,116 @@ Reformula la respuesta de manera que:
         return messages, False, None
         
     except Exception as e:
-        logger.error(f"Error al refrasear mensaje: {str(e)}")
+        logger.error(f"Error rephrasing message: {str(e)}")
         return messages, False, None
 
 def interviewer_node(state: InterviewState) -> InterviewState:
-    """Nodo principal que maneja la entrevista."""
+    """Main node that handles the interview."""
     try:
         llm = get_llm()
         current_question = state["current_question"]
         user_data = state.get("user_data", {})
-        nombre_usuario = user_data.get("nombre", "").split()[0] if user_data and user_data.get("nombre") else ""
+        user_name = user_data.get("user_name", "").split()[0] if user_data and user_data.get("user_name") else ""
         is_complete = state.get("is_complete", False)
         description = state.get("description", "")
         language = state.get("language", "es")
         
-        logger.info(f"Estado is_complete en interviewer_node: {is_complete}")
+        logger.info(f"is_complete state in interviewer_node: {is_complete}")
         
-        # Preparar la sección del participante
-        participante_section = f"PARTICIPANTE:\nNombre: {nombre_usuario}\n" if nombre_usuario else ""
+        # Prepare participant section
+        participant_section = f"PARTICIPANT:\nName: {user_name}\n" if user_name else ""
         
-        # Determinar el estado actual para el prompt
-        estado_actual = "COMPLETA" if is_complete is True else "NO SABE/NO RESPONDE" if is_complete == "NS-NR" else "INCOMPLETA"
+        # Determine current state for prompt
+        current_state = "COMPLETED" if is_complete is True else "DOESN'T KNOW/DOESN'T RESPOND" if is_complete == "NS-NR" else "INCOMPLETE"
         
-        # Crear el prompt del sistema
+        # System prompt
         system_message = SystemMessage(
-            content=f"""Eres un entrevistador profesional, amigable y cercano. Tu objetivo es hacer que el participante se sienta cómodo mientras obtienes una respuesta completa a la pregunta.
+            content=f"""You are a professional, friendly and approachable interviewer. Your goal is to make the participant feel comfortable while getting a complete answer to the question.
 
-IMPORTANTE SOBRE EL IDIOMA:
-1. DEBES RESPONDER EN EL MISMO IDIOMA EN QUE ESTÁ FORMULADA LA PREGUNTA
-2. Si la pregunta está en un idioma específico, usa ese idioma para todas tus respuestas
-3. Solo si la pregunta no tiene un idioma claro, usa el idioma por defecto: {language.upper()}
+IMPORTANT ABOUT LANGUAGE:
+1. YOU MUST RESPOND IN THE SAME LANGUAGE IN WHICH THE QUESTION IS FORMULATED
+2. If the question is in a specific language, use that language for all your responses
+3. Only if the question doesn't have a clear language, use the default language: {language.upper()}
 
-{participante_section}
-PREGUNTA ACTUAL:
+{participant_section}
+CURRENT QUESTION:
 {current_question['question']}
 
-CONTEXTO ESPECÍFICO A EXPLORAR:
+SPECIFIC CONTEXT TO EXPLORE ABOUT CURRENT QUESTION:
 {current_question['context']}
 
-INFORMACIÓN DE LA ENTREVISTA:
-Esta es una entrevista acerca de {description}
-Pregunta actual: {current_question['question_number']} de {current_question['total_questions']}
-Estado de la respuesta: {estado_actual}
-Valor de is_complete: {is_complete}
+INTERVIEW INFORMATION:
+This is an interview about {description}
+Current question: {current_question['question_number']} of {current_question['total_questions']}
+Response status: {current_state}
+is_complete value: {is_complete}
 
-INSTRUCCIONES:
-1. Si lo tienes, usa el nombre del participante para hacer la conversación más personal
-2. Mantén un tono profesional, amigable y cercano
-3. No des opiniones, sugerencias ni interpretes las respuestas
-4. Muestra interés genuino en las respuestas del participante
-5. NUNCA cierres la conversación hasta que la respuesta esté completa o el participante indique que no sabe/no quiere responder
-6. Mantén la conversación activa con preguntas de seguimiento relevantes al tema de {description}
-   - EN CADA MENSAJE, haz SOLO UNA o DOS preguntas de seguimiento
-   - Prioriza la pregunta más relevante para el contexto
-7. NO TE DESVÍES DE LA PREGUNTA Y CONTEXTO ACTUAL:
-   - Si el participante hace preguntas, responde amablemente que te enfocarás en su respuesta primero
-   - Si el participante menciona temas no relevantes, redirígelo suavemente hacia la pregunta original
-   - Si el participante quiere cambiar de tema, indícale amablemente que primero necesitas su respuesta sobre la pregunta actual
-   - Mantén el foco en obtener una respuesta completa sobre la pregunta y contexto actual
+INSTRUCTIONS:
+1. If available, use the participant's name to make the conversation more personal
+2. Maintain a professional, friendly and approachable tone
+3. Do not give opinions, suggestions or interpret responses
+4. Show genuine interest in the participant's responses
+5. NEVER close the conversation until the response is complete or the participant indicates they don't know/don't want to respond
+6. Keep the conversation active with relevant follow-up questions about the topic of {description}
+   - IN EACH MESSAGE, ask ONLY ONE or TWO follow-up questions
+   - Prioritize the most relevant question for the context
+7. DO NOT DEVIATE FROM THE CURRENT QUESTION AND CONTEXT:
+   - If the participant asks questions out of the current question and context, respond kindly that you will focus on their response first
+   - If the participant mentions irrelevant topics, gently redirect them to the original question
+   - If the participant wants to change topics, kindly indicate that you first need their response about the current question
+   - Keep focus on getting a complete response about the current question and context
 
-MANEJO DE RESPUESTAS:
-1. Si la respuesta es incoherente o no relacionada:
-   - Amablemente señala que la respuesta no está relacionada
-   - Reformula la pregunta de manera más clara
-   - Haz una pregunta de seguimiento específica sobre el contexto
+RESPONSE HANDLING:
+1. If the response is incoherent or unrelated:
+   - Kindly point out that the response is not related
+   - Reformulate the question more clearly
+   - Ask a specific follow-up question about the context
 
-2. Si la respuesta es incompleta (is_complete = False) de acuerdo a {is_complete}:
-   - Haz preguntas de seguimiento naturales sobre el contexto y el tema de {description}
-   - Pide detalles y ejemplos concretos
-   - Explora aspectos relevantes no mencionados
-   - Continúa la conversación hasta obtener una respuesta completa
+2. If the response is incomplete (is_complete = False) according to {is_complete}:
+   - Ask natural follow-up questions about the context and topic of {description}
+   - Ask for details and concrete examples
+   - Explore relevant aspects not mentioned
+   - Continue the conversation until you get a complete response
 
-3. Si el participante no sabe o no quiere responder (is_complete = NS-NR) de acuerdo a {is_complete}:
-   - Si es la última pregunta:
-     * Agradece la participación y despídete amablemente
-   - Si no es la última pregunta:
-     * Indica amablemente que pasaremos a la siguiente pregunta
+3. If the participant doesn't know or doesn't want to respond (is_complete = NS-NR) according to {is_complete}:
+   - If it's the last question:
+     * Thank them for participating and say goodbye kindly
+   - If it's not the last question:
+     * Kindly indicate that we will move to the next question
 
-IMPORTANTE:
-- Mantén la conversación activa hasta obtener una respuesta completa
-- No cierres la conversación prematuramente
-- Haz preguntas de seguimiento relevantes y específicas al tema de {description}
-- Guía al participante de manera constructiva hacia una respuesta completa
-- NO PERMITAS DESVIACIONES DE LA PREGUNTA Y CONTEXTO ACTUAL
-- RESPONDE EN EL MISMO IDIOMA DE LA PREGUNTA, o en {language.upper()} si no es claro
+IMPORTANT:
+- Keep the conversation active until you get a complete response
+- Do not close the conversation prematurely
+- Ask relevant and specific follow-up questions about the topic of {description}
+- Guide the participant constructively toward a complete response
+- DO NOT ALLOW DEVIATIONS FROM THE CURRENT QUESTION AND CONTEXT
+- RESPOND IN THE SAME LANGUAGE AS THE QUESTION, or in {language.upper()} if not clear
 """
         )
         
-        # Si no hay mensajes previos o el primer mensaje no es el del sistema
+        # If there are no previous messages or the first message is not the system message
         if not state["messages"] or not isinstance(state["messages"][0], SystemMessage):
             state["messages"] = [system_message] + state["messages"]
         
-        # Número máximo de intentos
+        # Maximum number of attempts
         max_retries = 3
         retry_count = 0
         
         while retry_count < max_retries:
             try:
-                # Obtener la respuesta del LLM
+                # Get LLM response
                 response = llm.invoke(state["messages"])
               
                 break
             except Exception as e:
                 error_data = getattr(e, 'response', {}).json() if hasattr(e, 'response') else {}
                 
-                # Verificar si es un error de filtro de contenido
+                # Check if it's a content filter error
                 if error_data.get('error', {}).get('code') == 'content_filter':
                     
                     
-                    # Intentar refrasear el mensaje y obtener la respuesta del LLM
-                    state["messages"], success, llm_response = refrasear_mensaje(llm, state["messages"], error_data, system_message)
+                    # Try to rephrase the message and get LLM response
+                    state["messages"], success, llm_response = rephrase_message(llm, state["messages"], error_data, system_message)
                     
                     if success and llm_response:
                         response = llm_response
@@ -299,7 +299,7 @@ IMPORTANTE:
                         retry_count += 1
                         continue
                 
-                # Si no es un error de filtro de contenido o no se pudo refrasear, lanzar la excepción
+                # If it's not a content filter error or couldn't rephrase, raise the exception
                 raise
         
         return {
@@ -308,104 +308,104 @@ IMPORTANTE:
         }
         
     except Exception as e:
-        logger.error(f"Error en interviewer_node: {str(e)}")
-        error_message = AIMessage(content=f"Lo siento, ha ocurrido un error: {str(e)}")
+        logger.error(f"Error in interviewer_node: {str(e)}")
+        error_message = AIMessage(content=f"Sorry, an error has occurred: {str(e)}")
         return {
             **state,
             "messages": state["messages"] + [error_message]
         }
 
 def validate_response(state: InterviewState) -> InterviewState:
-    """Nodo que valida si la respuesta es completa según el contexto, considerando toda la conversación."""
+    """Node that validates if the response is complete according to context, considering the entire conversation."""
     try:
         llm = get_llm()
         current_question = state["current_question"]
         messages = state["messages"]
         print(f"current_question: {current_question['context']}")
         
-        # Solo validar si hay mensajes del usuario
+        # Only validate if there are user messages
         if not messages or not any(isinstance(msg, HumanMessage) for msg in messages):
             return state
             
-        # Calcular el número de mensajes del usuario
+        # Calculate number of user messages
         user_messages_count = len([msg for msg in messages if isinstance(msg, HumanMessage)])
             
-        # Crear el prompt del sistema para validación
+        # System prompt for validation
         system_message = SystemMessage(
-            content=f"""Eres un analista experto en evaluar respuestas. Tu tarea es analizar TODA la conversación para determinar si se han cubierto TODOS los aspectos requeridos tanto de la pregunta como del contexto.
+            content=f"""You are an expert analyst in evaluating responses. Your task is to analyze the ENTIRE conversation to determine if ALL required aspects of both the question and context have been covered.
 
 ====================================================================
-PREGUNTA A EVALUAR:
+QUESTION TO EVALUATE:
 {current_question['question']}
 ====================================================================
 
 ====================================================================
-CONTEXTO REQUERIDO:
+REQUIRED CONTEXT:
 {current_question['context']}
 ====================================================================
 
 ====================================================================
-INFORMACIÓN DE LA CONVERSACIÓN:
-Número de mensajes del usuario: {user_messages_count}
+CONVERSATION INFORMATION:
+Number of user messages: {user_messages_count}
 ====================================================================
 
-INSTRUCCIONES:
+INSTRUCTIONS:
 
-1. EVALUACIÓN DE LA CONVERSACIÓN:
-   - Analiza TODOS los mensajes en conjunto, incluyendo respuestas y preguntas de seguimiento
-   - Evalúa si la suma de todas las respuestas cubre completamente la pregunta y el contexto requerido
-   - No evalúes mensaje por mensaje, sino la conversación como un todo
-   - Si el usuario expresa que no tiene nada más que agregar, quiere terminar o pasar a la siguiente pregunta, marca la respuesta como COMPLETADO
+1. CONVERSATION EVALUATION:
+   - Analyze ALL messages together, including responses and follow-up questions
+   - Evaluate if the sum of all responses completely covers the question and required context
+   - Do not evaluate message by message, but the conversation as a whole
+   - If the user expresses that they have nothing more to add, want to finish or move to the next question, mark the response as COMPLETED
 
-2. CRITERIOS DE VALIDACIÓN:
-   - La pregunta debe estar respondida en la conversación
-   - Todos los aspectos del Contexto Requerido deben estar cubiertos, si no hay contexto solo se debe responder la pregunta
-   - Si el usuario indica explícitamente que quiere terminar o pasar a la siguiente pregunta, marca como COMPLETADO
+2. VALIDATION CRITERIA:
+   - The question must be answered in the conversation
+   - All aspects of the Required Context must be covered, if there's no context only the question should be answered
+   - If the user explicitly indicates they want to finish or move to the next question, mark as COMPLETED
 
-3. CASO ESPECIAL (Solo para primera respuesta):
-   - IMPORTANTE: Este caso especial SOLO aplica si el número de mensajes del usuario es 1
-   - Si hay exactamente 1 mensaje del usuario:
-     * Marca como "NS-NR" si el participante indica que no sabe o no quiere responder
-     * Marca como "COMPLETADO" si el usuario expresa que no tiene nada más que agregar o quiere terminar
-   - Si hay más de 1 mensaje del usuario, ignora este caso especial y evalúa según los criterios normales
+3. SPECIAL CASE (Only for first response):
+   - IMPORTANT: This special case ONLY applies if the number of user messages is 1
+   - If there are exactly 1 user message:
+     * Mark as "NS-NR" if the participant indicates they don't know or don't want to respond
+     * Mark as "COMPLETED" if the user expresses they have nothing more to add or want to finish
+   - If there are more than 1 user message, ignore this special case and evaluate according to normal criteria
 
-4. Responde EXACTAMENTE con uno de estos formatos:
-   a) "NS-NR: [explicación]" - Solo para primera respuesta (cuando hay exactamente 1 mensaje del usuario)
-   b) "COMPLETADO: [explicación de cómo la conversación cubrió todo]"
-   c) "INCOMPLETO: [lista de aspectos faltantes]"
+4. Respond EXACTLY with one of these formats:
+   a) "NS-NR: [explanation]" - Only for first response (when there are exactly 1 user message)
+   b) "COMPLETED: [explanation of how the conversation covered everything]"
+   c) "INCOMPLETE: [list of missing aspects]"
 
 """
         )
         
-        # Obtener toda la conversación en formato texto
+        # Get the entire conversation in text format
         conversation = "\n".join([
-            f"{'Entrevistador' if isinstance(msg, AIMessage) else 'Participante'}: {msg.content}"
+            f"{'Interviewer' if isinstance(msg, AIMessage) else 'Participant'}: {msg.content}"
             for msg in messages
             if not isinstance(msg, SystemMessage)
         ])
         
-        # Número máximo de intentos
+        # Maximum number of attempts
         max_retries = 3
         retry_count = 0
         
         while retry_count < max_retries:
             try:
-                # Invocar el LLM para validar
+                # Invoke LLM for validation
                 validation_result = llm.invoke([
                     system_message, 
-                    HumanMessage(content=f"Conversación completa a analizar:\n{conversation}")
+                    HumanMessage(content=f"Complete conversation to analyze:\n{conversation}")
                 ])
-                print(f"Resultado de validación: {validation_result.content}")
+                print(f"Validation result: {validation_result.content}")
                 break
             except Exception as e:
                 error_data = getattr(e, 'response', {}).json() if hasattr(e, 'response') else {}
                 
-                # Verificar si es un error de filtro de contenido
+                # Check if it's a content filter error
                 if error_data.get('error', {}).get('code') == 'content_filter':
-                    logger.info(f"[ERROR] --> Filtro de contenido activado (Intento {retry_count + 1}/{max_retries})")
+                    logger.info(f"[ERROR] --> Content filter activated (Attempt {retry_count + 1}/{max_retries})")
                     
-                    # Intentar refrasear el mensaje y obtener la respuesta del LLM
-                    messages, success, llm_response = refrasear_mensaje(llm, messages, error_data, system_message)
+                    # Try to rephrase the message and get LLM response
+                    messages, success, llm_response = rephrase_message(llm, messages, error_data, system_message)
                     
                     if success and llm_response:
                         validation_result = llm_response
@@ -414,19 +414,19 @@ INSTRUCCIONES:
                         retry_count += 1
                         continue
                 
-                # Si no es un error de filtro de contenido o no se pudo refrasear, lanzar la excepción
+                # If it's not a content filter error or couldn't rephrase, raise the exception
                 raise
         
-        # Determinar el estado de la respuesta
+        # Determine response status
         if "NS-NR:" in validation_result.content and len([m for m in messages if isinstance(m, HumanMessage)]) <= 1:
-            # Solo asignar NS-NR si es la primera respuesta del usuario
+            # Only assign NS-NR if it's the user's first response
             is_complete = "NS-NR"
-        elif "COMPLETADO:" in validation_result.content:
+        elif "COMPLETED:" in validation_result.content:
             is_complete = True
         else:
             is_complete = False
         
-        logger.info(f"Estado establecido a: {is_complete}")
+        logger.info(f"State set to: {is_complete}")
         
         return {
             **state,
@@ -435,65 +435,65 @@ INSTRUCCIONES:
         }
         
     except Exception as e:
-        logger.error(f"Error en validate_response: {str(e)}")
+        logger.error(f"Error in validate_response: {str(e)}")
         return state
 
-def despedida_node(state: InterviewState) -> InterviewState:
-    """Nodo que maneja los mensajes de despedida cuando la respuesta está completa."""
+def farewell_node(state: InterviewState) -> InterviewState:
+    """Node that handles farewell messages when the response is complete."""
     try:
         llm = get_llm()
         current_question = state["current_question"]
         user_data = state.get("user_data", {})
-        nombre_usuario = user_data.get("nombre", "").split()[0] if user_data and user_data.get("nombre") else ""
+        user_name = user_data.get("user_name", "").split()[0] if user_data and user_data.get("user_name") else ""
         language = state.get("language", "es")
         
-        # Obtener el último mensaje del participante
+        # Get the last participant message
         last_user_message = None
         for msg in reversed(state["messages"]):
             if isinstance(msg, HumanMessage):
                 last_user_message = msg.content
                 break
         
-        # Crear un prompt para generar el mensaje de despedida
-        despedida_prompt = SystemMessage(
-            content=f"""Eres un entrevistador profesional y amigable. Tu tarea es generar un mensaje de despedida apropiado basado en la siguiente información:
+        # Prompt to generate the farewell message
+        farewell_prompt = SystemMessage(
+            content=f"""You are a professional and friendly interviewer. Your task is to generate an appropriate farewell message based on the following information:
 
-IMPORTANTE SOBRE EL IDIOMA:
-1. DEBES RESPONDER EN EL MISMO IDIOMA EN QUE ESTÁ FORMULADA LA PREGUNTA
-2. Si la pregunta está en un idioma específico, usa ese idioma para todas tus respuestas
-3. Solo si la pregunta no tiene un idioma claro, usa el idioma por defecto: {language.upper()}
+IMPORTANT ABOUT LANGUAGE:
+1. YOU MUST RESPOND IN THE SAME LANGUAGE IN WHICH THE QUESTION IS FORMULATED
+2. If the question is in a specific language, use that language for all your responses
+3. Only if the question doesn't have a clear language, use the default language: {language.upper()}
 
-PREGUNTA ACTUAL:
+CURRENT QUESTION:
 {current_question['question']}
 
-NOMBRE DEL PARTICIPANTE:
-{nombre_usuario}
+PARTICIPANT NAME:
+{user_name}
 
-ES LA ÚLTIMA PREGUNTA:
-{"Sí" if current_question['question_number'] == current_question['total_questions'] else "No"}
+IS THE LAST QUESTION:
+{"Yes" if current_question['question_number'] == current_question['total_questions'] else "No"}
 
-ÚLTIMA RESPUESTA DEL PARTICIPANTE:
-{last_user_message if last_user_message else "No hay respuesta previa"}
+LAST PARTICIPANT RESPONSE:
+{last_user_message if last_user_message else "No previous response"}
 
-INSTRUCCIONES:
-1. Genera un mensaje de despedida que:
-   - Sea personalizado usando el nombre del participante
-   - Mantenga un tono profesional y amigable haciendo un comentario breve sobre la ultima respuesta del participante
-   - Si es la última pregunta, incluya una despedida final y un agradecimiento por su tiempo
-   - Si no es la última pregunta, indique que se pasará a la siguiente pregunta y un agradecimiento por su tiempo
-2. El mensaje debe ser conciso (1-2 lineas máximo)
-3. No debe incluir preguntas ni solicitudes de información adicional
-4. Debe sonar natural y conversacional
-5. DEBES responder en el mismo idioma de la pregunta, o en {language.upper()} si no es claro
+INSTRUCTIONS:
+1. Generate a farewell message that:
+   - Is personalized using the participant's name
+   - Maintains a professional and friendly tone making a brief comment about the participant's last response
+   - If it's the last question, include a final farewell and thanks for their time
+   - If it's not the last question, indicate that we will move to the next question and thanks for their time
+2. The message should be concise (1-2 lines maximum)
+3. Should not include questions or requests for additional information
+4. Should sound natural and conversational
+5. YOU MUST respond in the same language as the question, or in {language.upper()} if not clear
 
-IMPORTANTE:
-- DEBES responder con el mensaje de despedida directamente
-- NO incluyas ningún otro texto o formato
+IMPORTANT:
+- YOU MUST respond with the farewell message directly
+- DO NOT include any other text or format
 """
         )
         
-        # Obtener el mensaje de despedida del LLM
-        response = llm.invoke([despedida_prompt])
+        # Get the farewell message from LLM
+        response = llm.invoke([farewell_prompt])
         
         return {
             **state,
@@ -502,8 +502,8 @@ IMPORTANTE:
         }
         
     except Exception as e:
-        logger.error(f"Error en despedida_node: {str(e)}")
-        error_message = AIMessage(content=f"Lo siento, ha ocurrido un error: {str(e)}")
+        logger.error(f"Error in farewell_node: {str(e)}")
+        error_message = AIMessage(content=f"Sorry, an error has occurred: {str(e)}")
         return {
             **state,
             "messages": state["messages"] + [error_message],
@@ -512,76 +512,76 @@ IMPORTANTE:
 
 def build_graph(checkpointer=None) -> StateGraph:
     """
-    Construye el grafo de la entrevista.
+    Builds the interview graph.
     
     Args:
-        checkpointer: El checkpointer para el grafo
+        checkpointer: The graph checkpointer
         
     Returns:
-        StateGraph: El grafo compilado
+        StateGraph: The compiled graph
     """
     workflow = StateGraph(InterviewState)
     
-    # Añadir los nodos
+    # Add nodes
     workflow.add_node("validate_response", validate_response)
     workflow.add_node("interviewer", interviewer_node)
-    workflow.add_node("despedida", despedida_node)
+    workflow.add_node("farewell", farewell_node)
     
-    # Definir el flujo: START -> validate_response -> conditional_edge -> interviewer/despedida -> END
+    # Define flow: START -> validate_response -> conditional_edge -> interviewer/farewell -> END
     workflow.add_edge(START, "validate_response")
     
-    # Función para determinar el siguiente nodo basado en is_complete
-    def route_based_on_completion(state: InterviewState) -> Literal["despedida", "interviewer"]:
+    # Function to determine next node based on is_complete
+    def route_based_on_completion(state: InterviewState) -> Literal["farewell", "interviewer"]:
         if state.get("is_complete") is True:
-            return "despedida"
+            return "farewell"
         return "interviewer"
     
-    # Añadir el conditional_edge
+    # Add conditional_edge
     workflow.add_conditional_edges(
         "validate_response",
         route_based_on_completion,
         {
-            "despedida": "despedida",
+            "farewell": "farewell",
             "interviewer": "interviewer"
         }
     )
     
-    # Añadir las conexiones a END
+    # Add connections to END
     workflow.add_edge("interviewer", END)
-    workflow.add_edge("despedida", END)
+    workflow.add_edge("farewell", END)
     
     return workflow.compile(checkpointer=checkpointer)
 
 def get_interview_graph(checkpointer=None):
     """
-    Obtiene el grafo compilado.
+    Gets the compiled graph.
     
     Args:
-        checkpointer: El checkpointer para el grafo
+        checkpointer: The graph checkpointer
         
     Returns:
-        StateGraph: El grafo compilado
+        StateGraph: The compiled graph
     """
     graph = build_graph(checkpointer)
     return graph
 
 async def run_interview_async(question: Dict = None, user_data: Dict = None, user_response: str = None, thread_id: str = "test-thread", description: str = "", language: str = "es"):
     """
-    Función principal que ejecuta la entrevista de forma asíncrona.
+    Main function that runs the interview asynchronously.
     
     Args:
-        question (Dict): Pregunta actual y su contexto, incluyendo question_number y total_questions
-        user_data (Dict): Datos del usuario
-        user_response (str): Respuesta del usuario si existe
-        thread_id (str): ID del hilo de la entrevista
-        description (str): Descripción general de la entrevista (opcional)
-        language (str): Idioma en el que se realizará la entrevista (por defecto 'es')
+        question (Dict): Current question and its context, including question_number and total_questions
+        user_data (Dict): User data
+        user_response (str): User response if exists
+        thread_id (str): Interview thread ID
+        description (str): General interview description (optional)
+        language (str): Language in which the interview will be conducted (default 'es')
         
     Returns:
-        Dict: Resultados de la entrevista
+        Dict: Interview results
     """
     try:
-        # Formar el estado inicial
+        # Form initial state
         state = {
             "messages": [HumanMessage(content=user_response)] if user_response else [],
             "current_question": {
@@ -597,37 +597,37 @@ async def run_interview_async(question: Dict = None, user_data: Dict = None, use
             "language": language
         }
         
-        # Configuración para el checkpointer
+        # Configuration for checkpointer
         config = {"configurable": {"thread_id": thread_id}}
         
-        # Obtener el checkpointer
+        # Get checkpointer
         checkpointer, pool = await get_db_connection()
         
         try:
-            # Obtener el grafo con el checkpointer
+            # Get graph with checkpointer
             graph = get_interview_graph(checkpointer=checkpointer)
             
-            # Lista para almacenar los mensajes procesados
+            # List to store processed messages
             processed_messages = []
             
-            # Variable para almacenar el último estado de is_complete y validation_result
+            # Variable to store last is_complete and validation_result state
             last_is_complete = False
             last_validation_result = ""
             
-            # Invocar el grafo con la configuración
+            # Invoke graph with configuration
             async for chunk in graph.astream(
                 state,
                 config
             ):
                 
-                # Procesar los chunks del agente
+                # Process agent chunks
                 chunk_result = process_chunks(chunk)
                 processed_messages.extend(chunk_result["messages"])
                 last_is_complete = chunk_result["is_complete"]
                 last_validation_result = chunk_result["validation_result"]
                 
             
-            # Retornar el resultado usando la información de los chunks
+            # Return result using chunk information
             return {
                 "status": "success",
                 "thread_id": thread_id,
@@ -638,11 +638,11 @@ async def run_interview_async(question: Dict = None, user_data: Dict = None, use
                 
             }
         finally:
-            # Cerrar la conexión
+            # Close connection
             await pool.close()
             
     except Exception as e:
-        logger.error(f"Error en run_interview: {str(e)}")
+        logger.error(f"Error in run_interview: {str(e)}")
         return {
             "status": "error",
             "message": str(e)
@@ -650,27 +650,27 @@ async def run_interview_async(question: Dict = None, user_data: Dict = None, use
 
 async def get_checkpoints(thread_id: str):
     """
-    Obtiene los checkpoints de una entrevista específica.
+    Gets checkpoints for a specific interview.
     
     Args:
-        thread_id (str): ID del hilo de la entrevista
+        thread_id (str): Interview thread ID
         
     Returns:
-        Dict: Diccionario con los checkpoints y el último checkpoint
+        Dict: Dictionary with checkpoints and last checkpoint
     """
     try:
-        # Obtener el checkpointer
+        # Get checkpointer
         checkpointer, pool = await get_db_connection()
         
         try:
-            # Configuración para el checkpointer
+            # Configuration for checkpointer
             config = {"configurable": {"thread_id": thread_id}}
             
-            # Obtener los checkpoints
+            # Get checkpoints
             checkpoints = checkpointer.alist(config)
             checkpoints_list = []
             
-            # Procesar los checkpoints
+            # Process checkpoints
             async for checkpoint in checkpoints:
                 checkpoint_data = checkpoint.checkpoint
                 channel_values = checkpoint_data["channel_values"]
@@ -696,7 +696,7 @@ async def get_checkpoints(thread_id: str):
                     ]
                 })
             
-            # Encontrar el último checkpoint basado en el timestamp
+            # Find last checkpoint based on timestamp
             last_checkpoint = max(checkpoints_list, key=lambda x: x["timestamp"]) if checkpoints_list else None
             
             return {
@@ -707,11 +707,11 @@ async def get_checkpoints(thread_id: str):
             }
             
         finally:
-            # Cerrar la conexión
+            # Close connection
             await pool.close()
             
     except Exception as e:
-        logger.error(f"Error al obtener checkpoints: {str(e)}")
+        logger.error(f"Error getting checkpoints: {str(e)}")
         return {
             "status": "error",
             "message": str(e)
