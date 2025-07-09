@@ -24,7 +24,6 @@
 7. [Despliegue en Producción](#despliegue-en-producción)
 8. [Contribuciones](#contribuciones)
 9. [Autores](#autores)
-10. [Licencia](#licencia)
 
 ---
 
@@ -349,13 +348,7 @@ Estaremos encantados de conocer tus ideas y colaborar en su desarrollo.
 
 **José Daniel Zárate**
 
----
 
-## Licencia
-
-Este proyecto está bajo la Licencia MIT. Consulta el archivo LICENSE para más detalles.
-
----
 
 ---
 
@@ -385,7 +378,6 @@ Este proyecto está bajo la Licencia MIT. Consulta el archivo LICENSE para más 
 7. [Production Deployment](#production-deployment)
 8. [Contributions](#contributions)
 9. [Authors](#authors)
-10. [License](#license)
 
 ---
 
@@ -722,9 +714,3 @@ We will be delighted to learn about your ideas and collaborate on their developm
 **Ignacio Cerrato**
 
 **José Daniel Zárate**
-
----
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
