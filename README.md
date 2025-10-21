@@ -29,6 +29,12 @@
 
 ## ¿Qué es Interview GPT AI API?
 
+**Interview GPT** es un proyecto compuesto por tres repositorios:
+
+- **AI API**: [EL-BID/Interview-GPT-AI-API](https://github.com/EL-BID/Interview-GPT-AI-API)
+- **Backend**: [EL-BID/Interview-GPT-backend](https://github.com/EL-BID/Interview-GPT-backend)
+- **Interfaz Web (UI)**: [EL-BID/Interview-GPT-UI](https://github.com/EL-BID/Interview-GPT-UI)
+
 Interview GPT AI API es un servicio con capacidades de IA diseñado para proporcionar capacidades de entrevistas conversacionales inteligentes para la aplicación Interview GPT. El sistema aprovecha las capacidades de IA para proporcionar:
 
 - **Flujo de Entrevista Inteligente**: Proceso de entrevista automatizado con preguntas conscientes del contexto usando LangGraph
