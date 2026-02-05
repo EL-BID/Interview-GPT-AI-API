@@ -24,11 +24,16 @@
 7. [Despliegue en Producción](#despliegue-en-producción)
 8. [Contribuciones](#contribuciones)
 9. [Autores](#autores)
-10. [Licencia](#licencia)
 
 ---
 
 ## ¿Qué es Interview GPT AI API?
+
+**Interview GPT** es un proyecto compuesto por tres repositorios:
+
+- **AI API**: [EL-BID/Interview-GPT-AI-API](https://github.com/EL-BID/Interview-GPT-AI-API)
+- **Backend**: [EL-BID/Interview-GPT-backend](https://github.com/EL-BID/Interview-GPT-backend)
+- **Interfaz Web (UI)**: [EL-BID/Interview-GPT-UI](https://github.com/EL-BID/Interview-GPT-UI)
 
 Interview GPT AI API es un servicio con capacidades de IA diseñado para proporcionar capacidades de entrevistas conversacionales inteligentes para la aplicación Interview GPT. El sistema aprovecha las capacidades de IA para proporcionar:
 
@@ -349,13 +354,7 @@ Estaremos encantados de conocer tus ideas y colaborar en su desarrollo.
 
 **José Daniel Zárate**
 
----
 
-## Licencia
-
-Este proyecto está bajo la Licencia MIT. Consulta el archivo LICENSE para más detalles.
-
----
 
 ---
 
@@ -385,7 +384,6 @@ Este proyecto está bajo la Licencia MIT. Consulta el archivo LICENSE para más 
 7. [Production Deployment](#production-deployment)
 8. [Contributions](#contributions)
 9. [Authors](#authors)
-10. [License](#license)
 
 ---
 
@@ -722,6 +720,7 @@ We will be delighted to learn about your ideas and collaborate on their developm
 **Ignacio Cerrato**
 
 **José Daniel Zárate**
+<<<<<<< HEAD
 
 ---
 
@@ -749,3 +748,5 @@ Los procedimientos y resultados obtenidos con la ejecución de este software son
 The Software may include features which use, are powered by, or are an artificial intelligence system (“AI-Powered Services”), and as a result, the services provided via the Software may not be completely error-free or up to date. Additionally, the User acknowledges that due to the incorporation of AI-Powered Services in the Software, the Software may not dynamically (in “real time”) retrieve information and that, consequently, the output provided to the User may not account for events, updates, or other facts that have occurred or become available after the Software was trained. Accordingly, the User acknowledges that the use of the Software, and that any actions taken or reliance on such products, are at the User’s own risk, and the User acknowledges that the User must independently verify any information provided by the Software.
 
 El Software puede incluir funciones que utilizan, están impulsadas por o son un sistema de inteligencia artificial (“Servicios Impulsados por IA”) y, como resultado, los servicios proporcionados a través del Software pueden no estar completamente libres de errores ni actualizados. Además, el Usuario reconoce que, debido a la incorporación de Servicios Impulsados por IA en el Software, este puede no recuperar información dinámicamente (en “tiempo real”) y que, en consecuencia, la información proporcionada al Usuario puede no reflejar eventos, actualizaciones u otros hechos que hayan ocurrido o estén disponibles después del entrenamiento del Software. En consecuencia, el Usuario reconoce que el uso del Software, y que cualquier acción realizada o la confianza depositada en dichos productos, se realiza bajo su propio riesgo, y reconoce que debe verificar de forma independiente cualquier información proporcionada por el Software.
+=======
+>>>>>>> ed75ab132db35aeaec52d7fe223041cb04ba79c5
